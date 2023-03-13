@@ -35,11 +35,53 @@ import math
 import rclpy
 
 from rclpy.node import Node
-from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference
+from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference, Imu
 from geometry_msgs.msg import TwistStamped, QuaternionStamped
+from ublox_msgs.msg import NavPVT
+
 from tf_transformations import quaternion_from_euler
 from libnmea_navsat_driver.checksum_utils import check_nmea_checksum
 from libnmea_navsat_driver import parser
+
+import math
+import numpy as np
+from std_msgs.msg import Float32
+
+def eulerFromQuaternion(x, y, z, w):
+  t0 = +2.0 * (w * x + y * z)
+  t1 = +1.0 - 2.0 * (x * x + y * y)
+  roll_x = math.atan2(t0, t1)
+    
+  t2 = +2.0 * (w * y - z * x)
+  t2 = +1.0 if t2 > +1.0 else t2
+  t2 = -1.0 if t2 < -1.0 else t2
+  pitch_y = math.asin(t2)
+    
+  t3 = +2.0 * (w * z + x * y)
+  t4 = +1.0 - 2.0 * (y * y + z * z)
+  yaw_z = math.atan2(t3, t4)
+    
+  return roll_x, pitch_y, yaw_z
+
+def get_quaternion_from_euler(roll, pitch, yaw):
+  """
+  Convert an Euler angle to a quaternion.
+  
+  Input
+    :param roll: The roll (rotation around x-axis) angle in radians.
+    :param pitch: The pitch (rotation around y-axis) angle in radians.
+    :param yaw: The yaw (rotation around z-axis) angle in radians.
+
+  Output
+    :return qx, qy, qz, qw: The orientation in quaternion [x,y,z,w] format
+  """
+  qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+  qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+  qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+  qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+
+  return [qx, qy, qz, qw]
+
 
 
 class Ros2NMEADriver(Node):
@@ -48,6 +90,16 @@ class Ros2NMEADriver(Node):
 
         self.fix_pub = self.create_publisher(NavSatFix, 'fix', 10)
         self.vel_pub = self.create_publisher(TwistStamped, 'vel', 10)
+
+        self.ublox_navpvt_pub = self.create_publisher(NavPVT, "navpvt", 10)
+        self.imu_pub = self.create_publisher(Imu, 'chc/imu', 10)
+        self.pub_pitch = self.create_publisher(Float32, 'chc/pitch', 2)
+        self.data = []
+        self.pitch_msg = Float32()
+        self.imu_msg = Imu()
+
+
+
         self.heading_pub = self.create_publisher(QuaternionStamped, 'heading', 10)
         self.time_ref_pub = self.create_publisher(TimeReference, 'time_reference', 10)
 
@@ -269,6 +321,28 @@ class Ros2NMEADriver(Node):
                 current_heading.quaternion.z = q[2]
                 current_heading.quaternion.w = q[3]
                 self.heading_pub.publish(current_heading)
+        elif 'CHC' in parsed_sentence:
+            data = parsed_sentence['CHC']
+            if data['fix_valid']==4:
+                navpvt_msg = NavPVT()
+                navpvt_msg.heading = int(math.degrees(data['heading'])*100000)
+                self.ublox_navpvt_pub.publish(navpvt_msg)
+            
+            try:
+                self.pitch_msg.data = data["pitch"]
+                self.data.append(data["pitch"])
+                self.pub_pitch.publish(self.pitch_msg)
+
+                self.imu_msg.header.stamp = self.get_clock().now().to_msg()
+                self.imu_msg.header.frame_id = "imu"
+                [qx, qy, qz, qw] = get_quaternion_from_euler(0.0, data["pitch"], 0.0)
+                self.imu_msg.orientation.x = qx
+                self.imu_msg.orientation.y = qy
+                self.imu_msg.orientation.z = qz
+                self.imu_msg.orientation.w = qw
+                self.imu_pub.publish(self.imu_msg)
+            except UnicodeDecodeError as err:
+                self.get_logger().warn("UnicodeDecodeError: {0}".format(err))
         else:
             return False
 

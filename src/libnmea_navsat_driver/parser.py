@@ -139,7 +139,21 @@ parse_maps = {
     "VTG": [
         ("true_course", safe_float, 1),
         ("speed", convert_knots_to_mps, 5)
-    ]
+    ],
+    "CHC": [
+        ("gps_week", int, 1),
+        ("gps_second", safe_float, 2),
+        ("heading", safe_float, 3),
+        ("pitch", safe_float, 4),
+        ("roll", safe_float, 5),
+        ("angular_velocity_x", safe_float, 6),
+        ("angular_velocity_y", safe_float, 7),
+        ("angular_velocity_z", safe_float, 8),
+        ("linear_acceleration_x", safe_float, 9),
+        ("linear_acceleration_y", safe_float, 10),
+        ("linear_acceleration_z", safe_float, 11),
+        ("fix_valid", int, 21)
+        ]
 }
 
 
