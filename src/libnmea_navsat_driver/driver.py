@@ -38,6 +38,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference, Imu
 from geometry_msgs.msg import TwistStamped, QuaternionStamped
 from ublox_msgs.msg import NavPVT
+from autoware_sensing_msgs.msg import GnssInsOrientationStamped
 
 from tf_transformations import quaternion_from_euler
 from libnmea_navsat_driver.checksum_utils import check_nmea_checksum
@@ -94,10 +95,11 @@ class Ros2NMEADriver(Node):
         self.ublox_navpvt_pub = self.create_publisher(NavPVT, "navpvt", 10)
         self.imu_pub = self.create_publisher(Imu, 'chc/imu', 10)
         self.pub_pitch = self.create_publisher(Float32, 'chc/pitch', 2)
+        self.pub_orientation = self.create_publisher(GnssInsOrientationStamped, '/autoware_orientation', 2)
         self.data = []
         self.pitch_msg = Float32()
         self.imu_msg = Imu()
-
+        self.orientation_msg = GnssInsOrientationStamped()
 
 
         self.heading_pub = self.create_publisher(QuaternionStamped, 'heading', 10)
@@ -334,13 +336,20 @@ class Ros2NMEADriver(Node):
                 self.pub_pitch.publish(self.pitch_msg)
 
                 self.imu_msg.header.stamp = self.get_clock().now().to_msg()
-                self.imu_msg.header.frame_id = "imu"
+                self.imu_msg.header.frame_id = "gnss"
                 [qx, qy, qz, qw] = get_quaternion_from_euler(0.0, data["pitch"], 0.0)
                 self.imu_msg.orientation.x = qx
                 self.imu_msg.orientation.y = qy
                 self.imu_msg.orientation.z = qz
                 self.imu_msg.orientation.w = qw
                 self.imu_pub.publish(self.imu_msg)
+                
+                self.orientation_msg.header = self.imu_msg.header
+                self.orientation_msg.orientation.orientation = self.imu_msg.orientation
+                self.orientation_msg.orientation.rmse_rotation_x = 0.001745329 # 0.1 degree
+                self.orientation_msg.orientation.rmse_rotation_y = 0.001745329 # 0.1 degree 
+                self.orientation_msg.orientation.rmse_rotation_z = 0.001745329 # 0.1 degree
+                self.pub_orientation.publish(self.orientation_msg)
             except UnicodeDecodeError as err:
                 self.get_logger().warn("UnicodeDecodeError: {0}".format(err))
         else:

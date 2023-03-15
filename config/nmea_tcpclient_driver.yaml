@@ -1,5 +1,5 @@
 nmea_navsat_driver:
   ros__parameters:
-    ip: "192.168.131.22"
-    port: 9001
+    ip: "192.168.1.111"
+    port: 9904
     buffer_size: 4096
