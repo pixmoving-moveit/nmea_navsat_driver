@@ -337,13 +337,22 @@ class Ros2NMEADriver(Node):
 
                 self.imu_msg.header.stamp = self.get_clock().now().to_msg()
                 self.imu_msg.header.frame_id = "gnss"
+                # orientation
                 [qx, qy, qz, qw] = get_quaternion_from_euler(0.0, data["pitch"], 0.0)
                 self.imu_msg.orientation.x = qx
                 self.imu_msg.orientation.y = qy
                 self.imu_msg.orientation.z = qz
                 self.imu_msg.orientation.w = qw
-                self.imu_pub.publish(self.imu_msg)
-                
+                # angular velocity the coordinate of imu is y-front x-right z-up, 
+                # so it has to be converted to right-handed coordinate
+                self.imu_msg.angular_velocity.x = math.radians(data["angular_velocity_y"])
+                self.imu_msg.angular_velocity.y =  math.radians(-data["angular_velocity_x"])
+                self.imu_msg.angular_velocity.z =  math.radians(data["angular_velocity_z"])
+                self.imu_msg.angular_velocity_covariance[0] = 0.001
+                self.imu_msg.angular_velocity_covariance[4] = 0.001
+                self.imu_msg.angular_velocity_covariance[8] = 0.001
+                self.imu_pub.publish(self.imu_msg) 
+                # orientation msg of autoware
                 self.orientation_msg.header = self.imu_msg.header
                 self.orientation_msg.orientation.orientation = self.imu_msg.orientation
                 self.orientation_msg.orientation.rmse_rotation_x = 0.001745329 # 0.1 degree
