@@ -367,6 +367,7 @@ class Ros2NMEADriver(Node):
                 self.get_logger().warn("UnicodeDecodeError: {0}".format(err))
         else:
             return False
+        return True
 
     """Helper method for getting the frame_id with the correct TF prefix"""
     def get_frame_id(self):
