@@ -331,6 +331,7 @@ class Ros2NMEADriver(Node):
                 self.ublox_navpvt_pub.publish(navpvt_msg)
             
             try:
+                head
                 self.pitch_msg.data = data["pitch"]
                 self.data.append(data["pitch"])
                 self.pub_pitch.publish(self.pitch_msg)
@@ -338,7 +339,10 @@ class Ros2NMEADriver(Node):
                 self.imu_msg.header.stamp = self.get_clock().now().to_msg()
                 self.imu_msg.header.frame_id = "gnss"
                 # orientation
-                [qx, qy, qz, qw] = get_quaternion_from_euler(0.0, data["pitch"], 0.0)
+                heading = math.radians(data['heading'])
+                pitch = math.radians(data['pitch'])
+                roll = math.radians(data['roll'])
+                [qx, qy, qz, qw] = get_quaternion_from_euler(roll, pitch, heading)
                 self.imu_msg.orientation.x = qx
                 self.imu_msg.orientation.y = qy
                 self.imu_msg.orientation.z = qz
