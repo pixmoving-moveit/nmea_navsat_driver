@@ -33,14 +33,36 @@
 """Provides a driver for NMEA GNSS devices."""
 
 import math
-
+import numpy as np
 import rospy
+from std_msgs.msg import Float32
 
-from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference
+from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference, Imu
 from geometry_msgs.msg import TwistStamped
+# from autoware_sensing_msgs.msg import GnssInsOrientationStamped
 
 from libnmea_navsat_driver.checksum_utils import check_nmea_checksum
 import libnmea_navsat_driver.parser
+from tf.transformations import quaternion_from_euler
+from ublox_msgs.msg import NavPVT
+
+def get_quaternion_from_euler(roll, pitch, yaw):
+    """
+    Convert an Euler angle to a quaternion.
+    
+    Input
+        :param roll: The roll (rotation around x-axis) angle in radians.
+        :param pitch: The pitch (rotation around y-axis) angle in radians.
+        :param yaw: The yaw (rotation around z-axis) angle in radians.
+    Output
+        :return qx, qy, qz, qw: The orientation in quaternion [x,y,z,w] format
+    """
+    qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+    qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+    qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+    qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+
+    return [qx, qy, qz, qw]
 
 
 class RosNMEADriver(object):
@@ -67,6 +89,17 @@ class RosNMEADriver(object):
         """
         self.fix_pub = rospy.Publisher('fix', NavSatFix, queue_size=1)
         self.vel_pub = rospy.Publisher('vel', TwistStamped, queue_size=1)
+        self.imu_pub = rospy.Publisher('chc/imu', Imu, queue_size=1)
+        self.imu_msg = Imu()
+
+        self.pub_pitch = rospy.Publisher('chc/pitch',Float32,  queue_size=2)
+        self.pitch_msg = Float32()
+        self.data = []
+
+        # self.pub_orientation = self.Publisher('/autoware_orientation', GnssInsOrientationStamped, 2)
+        # self.orientation_msg = GnssInsOrientationStamped()
+
+        self.ublox_navpvt_pub = rospy.Publisher('/fixposition/navpvt', NavPVT, queue_size=1, latch=False)
         self.use_GNSS_time = rospy.get_param('~use_GNSS_time', False)
         if not self.use_GNSS_time:
             self.time_ref_pub = rospy.Publisher(
@@ -243,6 +276,46 @@ class RosNMEADriver(object):
                 current_vel.twist.linear.y = data['speed'] * \
                     math.cos(data['true_course'])
                 self.vel_pub.publish(current_vel)
+        elif 'CHC' in parsed_sentence:
+            data = parsed_sentence['CHC']
+            if data['fix_valid']:
+                navpvt_msg = NavPVT()
+                navpvt_msg.heading = int(math.degrees(data['heading'])*100000)
+                self.ublox_navpvt_pub.publish(navpvt_msg)
+            try:
+                self.pitch_msg.data = data["pitch"]
+                self.data.append(data["pitch"])
+                self.pub_pitch.publish(self.pitch_msg)
+
+                self.imu_msg.header.stamp = rospy.Time()
+                self.imu_msg.header.frame_id = "gnss"
+                # orientation
+                heading = math.radians(90.0-data['heading'])
+                pitch = math.radians(data['pitch'])
+                roll = math.radians(data['roll'])
+                [qx, qy, qz, qw] = get_quaternion_from_euler(roll, pitch, heading)
+                self.imu_msg.orientation.x = qx
+                self.imu_msg.orientation.y = qy
+                self.imu_msg.orientation.z = qz
+                self.imu_msg.orientation.w = qw
+                # angular velocity the coordinate of imu is y-front x-right z-up, 
+                # so it has to be converted to right-handed coordinate
+                self.imu_msg.angular_velocity.x = math.radians(data["angular_velocity_y"])
+                self.imu_msg.angular_velocity.y =  math.radians(-data["angular_velocity_x"])
+                self.imu_msg.angular_velocity.z =  math.radians(data["angular_velocity_z"])
+                self.imu_msg.angular_velocity_covariance[0] = 0.001
+                self.imu_msg.angular_velocity_covariance[4] = 0.001
+                self.imu_msg.angular_velocity_covariance[8] = 0.001
+                self.imu_pub.publish(self.imu_msg) 
+                # orientation msg of autoware
+                # self.orientation_msg.header = self.imu_msg.header
+                # self.orientation_msg.orientation.orientation = self.imu_msg.orientation
+                # self.orientation_msg.orientation.rmse_rotation_x = 0.001745329 # 0.1 degree
+                # self.orientation_msg.orientation.rmse_rotation_y = 0.001745329 # 0.1 degree 
+                # self.orientation_msg.orientation.rmse_rotation_z = 0.001745329 # 0.1 degree
+                # self.pub_orientation.publish(self.orientation_msg)
+            except UnicodeDecodeError as err:
+                self.get_logger().warn("UnicodeDecodeError: {0}".format(err))
         else:
             return False
 
