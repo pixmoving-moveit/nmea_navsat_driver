@@ -1,0 +1,5 @@
+#! /usr/bin/env python
+
+import libnmea_navsat_driver.nodes.nmea_tcpclient_driver
+
+libnmea_navsat_driver.nodes.nmea_tcpclient_driver.main()
