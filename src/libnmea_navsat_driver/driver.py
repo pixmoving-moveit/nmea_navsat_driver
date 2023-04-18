@@ -301,6 +301,11 @@ class RosNMEADriver(object):
                 self.imu_msg.angular_velocity.x = math.radians(data["angular_velocity_y"])
                 self.imu_msg.angular_velocity.y =  math.radians(-data["angular_velocity_x"])
                 self.imu_msg.angular_velocity.z =  math.radians(data["angular_velocity_z"])
+
+                self.imu_msg.linear_acceleration.x = data["linear_acceleration_y"]
+                self.imu_msg.linear_acceleration.y = -data["linear_acceleration_x"]
+                self.imu_msg.linear_acceleration.z = data["linear_acceleration_z"]
+
                 self.imu_msg.angular_velocity_covariance[0] = 0.001
                 self.imu_msg.angular_velocity_covariance[4] = 0.001
                 self.imu_msg.angular_velocity_covariance[8] = 0.001
