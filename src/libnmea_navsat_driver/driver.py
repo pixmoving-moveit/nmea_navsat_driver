@@ -90,6 +90,7 @@ class RosNMEADriver(object):
         self.vel_pub = rospy.Publisher('vel', TwistStamped, queue_size=1)
         self.imu_pub = rospy.Publisher('chc/imu', Imu, queue_size=1)
         self.imu_msg = Imu()
+        self.acc_g = 9.80665
 
         self.pub_pitch = rospy.Publisher('chc/pitch',Float32,  queue_size=2)
         self.pitch_msg = Float32()
@@ -285,7 +286,7 @@ class RosNMEADriver(object):
                 self.data.append(data["pitch"])
                 self.pub_pitch.publish(self.pitch_msg)
 
-                self.imu_msg.header.stamp = rospy.Time()
+                self.imu_msg.header.stamp = rospy.Time.now()
                 self.imu_msg.header.frame_id = "gnss"
                 # orientation
                 heading = math.radians(90.0-data['heading'])
@@ -302,9 +303,9 @@ class RosNMEADriver(object):
                 self.imu_msg.angular_velocity.y =  math.radians(-data["angular_velocity_x"])
                 self.imu_msg.angular_velocity.z =  math.radians(data["angular_velocity_z"])
 
-                self.imu_msg.linear_acceleration.x = data["linear_acceleration_y"]
-                self.imu_msg.linear_acceleration.y = -data["linear_acceleration_x"]
-                self.imu_msg.linear_acceleration.z = data["linear_acceleration_z"]
+                self.imu_msg.linear_acceleration.x = data["linear_acceleration_y"] * self.acc_g
+                self.imu_msg.linear_acceleration.y = -data["linear_acceleration_x"]* self.acc_g
+                self.imu_msg.linear_acceleration.z = data["linear_acceleration_z"]* self.acc_g
 
                 self.imu_msg.angular_velocity_covariance[0] = 0.001
                 self.imu_msg.angular_velocity_covariance[4] = 0.001
