@@ -354,6 +354,9 @@ class Ros2NMEADriver(Node):
                 self.imu_msg.angular_velocity_covariance[0] = 0.001
                 self.imu_msg.angular_velocity_covariance[4] = 0.001
                 self.imu_msg.angular_velocity_covariance[8] = 0.001
+                self.imu_msg.linear_acceleration.x = data["linear_acceleration_y"] * 9.80665
+                self.imu_msg.linear_acceleration.y = -data["linear_acceleration_x"]* 9.80665
+                self.imu_msg.linear_acceleration.z = data["linear_acceleration_z"]* 9.80665
                 self.imu_pub.publish(self.imu_msg) 
                 # orientation msg of autoware
                 self.orientation_msg.header = self.imu_msg.header
