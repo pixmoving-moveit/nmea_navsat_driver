@@ -95,9 +95,11 @@ class Ros2NMEADriver(Node):
         self.ublox_navpvt_pub = self.create_publisher(NavPVT, "navpvt", 10)
         self.imu_pub = self.create_publisher(Imu, 'chc/imu', 10)
         self.pub_pitch = self.create_publisher(Float32, 'chc/pitch', 2)
+        self.pub_heading = self.create_publisher(Float32, 'chc/heading', 2)
         self.pub_orientation = self.create_publisher(GnssInsOrientationStamped, '/autoware_orientation', 2)
         self.data = []
         self.pitch_msg = Float32()
+        self.heading_msg = Float32()
         self.imu_msg = Imu()
         self.orientation_msg = GnssInsOrientationStamped()
 
@@ -335,10 +337,15 @@ class Ros2NMEADriver(Node):
                 self.data.append(data["pitch"])
                 self.pub_pitch.publish(self.pitch_msg)
 
+                self.heading_msg.data = data['heading']
+                self.pub_heading.publish(self.heading_msg)
+                
                 self.imu_msg.header.stamp = self.get_clock().now().to_msg()
                 self.imu_msg.header.frame_id = "gnss"
                 # orientation
                 heading = math.radians(90.0-data['heading'])
+                
+                
                 pitch = math.radians(data['pitch'])
                 roll = math.radians(data['roll'])
                 [qx, qy, qz, qw] = get_quaternion_from_euler(roll, pitch, heading)
