@@ -36,13 +36,14 @@ import rclpy
 
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference, Imu
-from geometry_msgs.msg import TwistStamped, QuaternionStamped
+from geometry_msgs.msg import TwistStamped, QuaternionStamped, PoseWithCovarianceStamped
 from ublox_msgs.msg import NavPVT
 from autoware_sensing_msgs.msg import GnssInsOrientationStamped
 
 from tf_transformations import quaternion_from_euler
 from libnmea_navsat_driver.checksum_utils import check_nmea_checksum
 from libnmea_navsat_driver import parser
+from libnmea_navsat_driver import coor_conv
 
 import math
 import numpy as np
@@ -91,6 +92,7 @@ class Ros2NMEADriver(Node):
 
         self.fix_pub = self.create_publisher(NavSatFix, 'fix', 10)
         self.vel_pub = self.create_publisher(TwistStamped, 'vel', 10)
+        self.pose_pub = self.create_publisher(PoseWithCovarianceStamped, 'chc/pose', 10)
 
         self.ublox_navpvt_pub = self.create_publisher(NavPVT, "navpvt", 10)
         self.imu_pub = self.create_publisher(Imu, 'chc/imu', 10)
@@ -348,6 +350,7 @@ class Ros2NMEADriver(Node):
                 
                 pitch = math.radians(data['pitch'])
                 roll = math.radians(data['roll'])
+                x, y, z = coor_conv.lla2ecef_simple(data['latitude'], data['longitude'], data['altitude'])
                 [qx, qy, qz, qw] = get_quaternion_from_euler(roll, pitch, heading)
                 self.imu_msg.orientation.x = qx
                 self.imu_msg.orientation.y = qy
@@ -372,6 +375,14 @@ class Ros2NMEADriver(Node):
                 self.orientation_msg.orientation.rmse_rotation_y = 0.001745329 # 0.1 degree 
                 self.orientation_msg.orientation.rmse_rotation_z = 0.001745329 # 0.1 degree
                 self.pub_orientation.publish(self.orientation_msg)
+                # pose msg
+                pose_msg = PoseWithCovarianceStamped()
+                pose_msg.header = self.imu_msg.header
+                pose_msg.pose.pose.position.x = x
+                pose_msg.pose.pose.position.y = y
+                pose_msg.pose.pose.position.z = z
+                pose_msg.pose.pose.orientation = self.imu_msg.orientation
+                self.pose_pub.publish(pose_msg)
             except UnicodeDecodeError as err:
                 self.get_logger().warn("UnicodeDecodeError: {0}".format(err))
         else:

@@ -152,6 +152,9 @@ parse_maps = {
         ("linear_acceleration_x", safe_float, 9),
         ("linear_acceleration_y", safe_float, 10),
         ("linear_acceleration_z", safe_float, 11),
+        ('latitude', safe_float, 12),
+        ('longitude', safe_float, 12),
+        ('altitude', safe_float, 12),
         ("fix_valid", int, 21)
         ]
 }
