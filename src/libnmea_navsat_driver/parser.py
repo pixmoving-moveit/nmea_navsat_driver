@@ -58,7 +58,11 @@ def convert_latitude(field):
 
 
 def convert_longitude(field):
-    return safe_float(field[0:3]) + safe_float(field[3:]) / 60.0
+    degree = safe_float(field[-len(field):-11])
+    minute = safe_float(field[-11:-1])
+    if(degree < 0):
+        minute = -minute
+    return degree + minute / 60.0
 
 
 def convert_time(nmea_utc):
